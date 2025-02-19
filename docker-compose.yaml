@@ -1,0 +1,24 @@
+version: '3'
+services:
+  cog-video:
+    image:  cog-image:v2 #nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+    container_name: tats-container
+    network_mode: "host"    # 添加这行来使用主机网络
+    command: tail -f /dev/null
+    volumes:
+      - ./:/workspace
+      - /home/gpu02/dingli:/home/gpu02/dingli
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    tty: true
+    stdin_open: true
+    working_dir: /workspace
+    shm_size: '16gb'
+
+volumes:
+  huggingface_cache:

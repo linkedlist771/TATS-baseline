@@ -7,7 +7,7 @@ import html
 import os
 from functools import lru_cache
 from pathlib import Path
-import ftfy
+# import ftfy
 import regex as re
 
 
@@ -43,7 +43,7 @@ def get_pairs(word):
 
 
 def basic_clean(text):
-    text = ftfy.fix_text(text)
+    # text = ftfy.fix_text(text) we don't use this
     text = html.unescape(html.unescape(text))
     return text.strip()
 

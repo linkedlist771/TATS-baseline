@@ -11,7 +11,7 @@ def main():
     pl.seed_everything(1234)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch_size', type=int, default=32)
+    # parser.add_argumentgument('--batch_size', type=int, default=32)
     parser.add_argument('--gpus', type=int, default=1)
     parser.add_argument('--max_steps', type=int, default=None)
     parser.add_argument('--accumulate_grad_batches', type=int, default=1)

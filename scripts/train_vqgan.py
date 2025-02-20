@@ -11,7 +11,14 @@ def main():
     pl.seed_everything(1234)
 
     parser = argparse.ArgumentParser()
-    parser = pl.Trainer.add_argparse_args(parser)
+    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--gpus', type=int, default=1)
+    parser.add_argument('--max_steps', type=int, default=None)
+    parser.add_argument('--accumulate_grad_batches', type=int, default=1)
+    parser.add_argument('--gradient_clip_val', type=float, default=1.0)
+    parser.add_argument('--default_root_dir', type=str, default='checkpoints/vqgan')
+    
     parser = VQGAN.add_model_specific_args(parser)
     parser = VideoData.add_data_specific_args(parser)
     args = parser.parse_args()
@@ -36,34 +43,27 @@ def main():
     callbacks.append(ImageLogger(batch_frequency=750, max_images=4, clamp=True))
     callbacks.append(VideoLogger(batch_frequency=1500, max_videos=4, clamp=True))
 
-    kwargs = dict()
+    trainer_kwargs = {
+        'callbacks': callbacks,
+        'max_steps': args.max_steps,
+        'gradient_clip_val': args.gradient_clip_val,
+        'accumulate_grad_batches': args.accumulate_grad_batches,
+        'default_root_dir': args.default_root_dir
+    }
+
     if args.gpus > 1:
-        kwargs = dict(accelerator="gpu",
-                     devices=args.gpus,
-                     strategy="ddp")
+        trainer_kwargs.update({
+            'accelerator': 'gpu',
+            'devices': args.gpus,
+            'strategy': 'ddp'
+        })
+    elif args.gpus == 1:
+        trainer_kwargs.update({
+            'accelerator': 'gpu',
+            'devices': 1
+        })
 
-    # load the most recent checkpoint file
-    base_dir = os.path.join(args.default_root_dir, 'lightning_logs')
-    if os.path.exists(base_dir):
-        log_folder = ckpt_file = ''
-        version_id_used = step_used = 0
-        for folder in os.listdir(base_dir):
-            version_id = int(folder.split('_')[1])
-            if version_id > version_id_used:
-                version_id_used = version_id
-                log_folder = folder
-        if len(log_folder) > 0:
-            ckpt_folder = os.path.join(base_dir, log_folder, 'checkpoints')
-            for fn in os.listdir(ckpt_folder):
-                if fn == 'latest_checkpoint.ckpt':
-                    ckpt_file = 'latest_checkpoint_prev.ckpt'
-                    os.rename(os.path.join(ckpt_folder, fn), os.path.join(ckpt_folder, ckpt_file))
-            if len(ckpt_file) > 0:
-                args.resume_from_checkpoint = os.path.join(ckpt_folder, ckpt_file)
-                print('will start from the recent ckpt %s'%args.resume_from_checkpoint)
-
-    trainer = pl.Trainer.from_argparse_args(args, callbacks=callbacks, 
-                                            max_steps=args.max_steps, **kwargs)
+    trainer = pl.Trainer(**trainer_kwargs)
 
     trainer.fit(model, data)
 

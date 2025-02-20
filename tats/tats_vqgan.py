@@ -40,7 +40,7 @@ class VQGAN(pl.LightningModule):
     def __init__(self, args):
         super().__init__()
         self.args = args
-        self.automatic_optimization = False
+        self.automatic_optimization = True
         self.embedding_dim = args.embedding_dim
         self.n_codes = args.n_codes
 
@@ -177,31 +177,26 @@ class VQGAN(pl.LightningModule):
         perceptual_loss = self.perceptual_model(frames, frames_recon) * self.perceptual_weight
         return recon_loss, x_recon, vq_output, perceptual_loss
 
-    def training_step(self, batch, batch_idx):
-        # Get optimizers
-        opt_ae, opt_disc = self.optimizers()
-        
+    def training_step(self, batch, batch_idx, optimizer_idx):
         x = batch['video']
-
-        # Train autoencoder
-        opt_ae.zero_grad()
-        recon_loss, x_recon, vq_output, aeloss, perceptual_loss, gan_feat_loss = self.forward(x, optimizer_idx=0)
-        commitment_loss = vq_output['commitment_loss']
-        ae_loss = recon_loss + commitment_loss + aeloss + perceptual_loss + gan_feat_loss
-        self.manual_backward(ae_loss)
-        opt_ae.step()
-
-        # Train discriminator
-        opt_disc.zero_grad()
-        disc_loss = self.forward(x, optimizer_idx=1)
-        self.manual_backward(disc_loss)
-        opt_disc.step()
-
-        # Log losses
-        self.log("train/ae_loss", ae_loss, prog_bar=True)
-        self.log("train/disc_loss", disc_loss, prog_bar=True)
-
-        return {"ae_loss": ae_loss, "disc_loss": disc_loss}
+        
+        # 自编码器优化
+        if optimizer_idx == 0:
+            recon_loss, x_recon, vq_output, aeloss, perceptual_loss, gan_feat_loss = self.forward(x, optimizer_idx=0)
+            commitment_loss = vq_output['commitment_loss']
+            ae_loss = recon_loss + commitment_loss + aeloss + perceptual_loss + gan_feat_loss
+            
+            # Log losses
+            self.log("train/ae_loss", ae_loss, prog_bar=True)
+            return ae_loss
+        
+        # 判别器优化
+        if optimizer_idx == 1:
+            disc_loss = self.forward(x, optimizer_idx=1)
+            
+            # Log losses 
+            self.log("train/disc_loss", disc_loss, prog_bar=True)
+            return disc_loss
 
     def validation_step(self, batch, batch_idx):
         x = batch['video'] # TODO: batch['stft']
@@ -212,7 +207,6 @@ class VQGAN(pl.LightningModule):
         self.log('val/commitment_loss', vq_output['commitment_loss'], prog_bar=True)
 
     def configure_optimizers(self):
-
         lr = self.args.lr
         opt_ae = torch.optim.Adam(list(self.encoder.parameters())+
                                   list(self.decoder.parameters())+
@@ -223,6 +217,8 @@ class VQGAN(pl.LightningModule):
         opt_disc = torch.optim.Adam(list(self.image_discriminator.parameters())+
                                     list(self.video_discriminator.parameters()),
                                     lr=self.args.lr, betas=(0.5, 0.9))
+        
+        # 返回优化器和调度器配置
         return [opt_ae, opt_disc], []
 
     def log_images(self, batch, **kwargs):

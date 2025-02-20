@@ -28,7 +28,8 @@ def main():
     data.test_dataloader()
 
     # automatically adjust learning rate
-    bs, base_lr, ngpu, accumulate = args.batch_size, args.lr, args.gpus, args.accumulate_grad_batches
+    bs, ngpu, accumulate = args.batch_size, args.gpus, args.accumulate_grad_batches
+    base_lr = args.lr  # 现在 args.lr 来自 VQGAN.add_model_specific_args() 中定义的 3e-4
     args.lr = accumulate * (ngpu/8.) * (bs/4.) * base_lr
     print("Setting learning rate to {:.2e} = {} (accumulate_grad_batches) * {} (num_gpus/8) * {} (batchsize/4) * {:.2e} (base_lr)".format(
         args.lr, accumulate, ngpu/8, bs/4, base_lr))

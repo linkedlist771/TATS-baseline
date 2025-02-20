@@ -8,6 +8,11 @@ import torch
 import torch.nn as nn
 from torchvision import models
 from collections import namedtuple
+from pathlib import Path
+ROOT = Path(__file__).parent.parent.parent
+CKPT_PATH = ROOT / "vgg16-397923af.pth"
+
+print("ROOT", ROOT)
 
 URL_MAP = {
     "vgg_lpips": "https://heibox.uni-heidelberg.de/f/607503859c864bc1b30b/?dl=1"
@@ -67,16 +72,18 @@ class LPIPS(nn.Module):
             param.requires_grad = False
 
     def load_from_pretrained(self, name="vgg_lpips"):
-        ckpt = get_ckpt_path(name, os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache"))
+        # ckpt = get_ckpt_path(name, os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache"))
+        ckpt = CKPT_PATH
         self.load_state_dict(torch.load(ckpt, map_location=torch.device("cpu")), strict=False)
         print("loaded pretrained LPIPS loss from {}".format(ckpt))
 
     @classmethod
     def from_pretrained(cls, name="vgg_lpips"):
-        if name is not "vgg_lpips":
+        if name != "vgg_lpips":
             raise NotImplementedError
         model = cls()
-        ckpt = get_ckpt_path(name, os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache"))
+        ckpt = CKPT_PATH
+        # ckpt = get_ckpt_path(name, os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache"))
         model.load_state_dict(torch.load(ckpt, map_location=torch.device("cpu")), strict=False)
         return model
 
@@ -118,7 +125,14 @@ class NetLinLayer(nn.Module):
 class vgg16(torch.nn.Module):
     def __init__(self, requires_grad=False, pretrained=True):
         super(vgg16, self).__init__()
-        vgg_pretrained_features = models.vgg16(pretrained=pretrained).features
+        # Load the state dict from the local file
+        state_dict = torch.load(CKPT_PATH, map_location=torch.device('cpu'))
+
+        # Create a new VGG16 model
+        vgg_model = models.vgg16(pretrained=False)
+        vgg_model.load_state_dict(state_dict)
+        vgg_pretrained_features = vgg_model.features
+
         self.slice1 = torch.nn.Sequential()
         self.slice2 = torch.nn.Sequential()
         self.slice3 = torch.nn.Sequential()

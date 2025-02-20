@@ -185,19 +185,23 @@ class VQGAN(pl.LightningModule):
 
         # Train autoencoder
         opt_ae.zero_grad()
-        recon_loss, _, vq_output, aeloss, perceptual_loss, gan_feat_loss = self.forward(x, optimizer_idx=0)
+        recon_loss, x_recon, vq_output, aeloss, perceptual_loss, gan_feat_loss = self.forward(x, optimizer_idx=0)
         commitment_loss = vq_output['commitment_loss']
-        loss = recon_loss + commitment_loss + aeloss + perceptual_loss + gan_feat_loss
-        self.manual_backward(loss)
+        ae_loss = recon_loss + commitment_loss + aeloss + perceptual_loss + gan_feat_loss
+        self.manual_backward(ae_loss)
         opt_ae.step()
 
         # Train discriminator
         opt_disc.zero_grad()
-        discloss = self.forward(x, optimizer_idx=1)
-        self.manual_backward(discloss)
+        disc_loss = self.forward(x, optimizer_idx=1)
+        self.manual_backward(disc_loss)
         opt_disc.step()
 
-        return loss  # Return the autoencoder loss for logging
+        # Log losses
+        self.log("train/ae_loss", ae_loss, prog_bar=True)
+        self.log("train/disc_loss", disc_loss, prog_bar=True)
+
+        return {"ae_loss": ae_loss, "disc_loss": disc_loss}
 
     def validation_step(self, batch, batch_idx):
         x = batch['video'] # TODO: batch['stft']

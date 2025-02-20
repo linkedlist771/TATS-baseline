@@ -40,6 +40,7 @@ class VQGAN(pl.LightningModule):
     def __init__(self, args):
         super().__init__()
         self.args = args
+        self.automatic_optimization = False
         self.embedding_dim = args.embedding_dim
         self.n_codes = args.n_codes
 
@@ -176,16 +177,27 @@ class VQGAN(pl.LightningModule):
         perceptual_loss = self.perceptual_model(frames, frames_recon) * self.perceptual_weight
         return recon_loss, x_recon, vq_output, perceptual_loss
 
-    def training_step(self, batch, batch_idx, optimizer_idx):
+    def training_step(self, batch, batch_idx):
+        # Get optimizers
+        opt_ae, opt_disc = self.optimizers()
+        
         x = batch['video']
-        if optimizer_idx == 0:
-            recon_loss, _, vq_output, aeloss, perceptual_loss, gan_feat_loss = self.forward(x, optimizer_idx)
-            commitment_loss = vq_output['commitment_loss']
-            loss = recon_loss + commitment_loss + aeloss + perceptual_loss + gan_feat_loss
-        if optimizer_idx == 1:
-            discloss = self.forward(x, optimizer_idx)
-            loss = discloss
-        return loss
+
+        # Train autoencoder
+        opt_ae.zero_grad()
+        recon_loss, _, vq_output, aeloss, perceptual_loss, gan_feat_loss = self.forward(x, optimizer_idx=0)
+        commitment_loss = vq_output['commitment_loss']
+        loss = recon_loss + commitment_loss + aeloss + perceptual_loss + gan_feat_loss
+        self.manual_backward(loss)
+        opt_ae.step()
+
+        # Train discriminator
+        opt_disc.zero_grad()
+        discloss = self.forward(x, optimizer_idx=1)
+        self.manual_backward(discloss)
+        opt_disc.step()
+
+        return loss  # Return the autoencoder loss for logging
 
     def validation_step(self, batch, batch_idx):
         x = batch['video'] # TODO: batch['stft']

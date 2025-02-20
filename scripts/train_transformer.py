@@ -31,10 +31,10 @@ def main():
 
     kwargs = dict()
     if args.gpus > 1:
-        # find_unused_parameters = False to support gradient checkpointing
-        kwargs = dict(gpus=args.gpus,
-                      # plugins=["deepspeed_stage_2"])
-                      plugins=[pl.plugins.DDPPlugin(find_unused_parameters=False)])
+        kwargs = dict(accelerator="gpu",
+                     devices=args.gpus,
+                     strategy="ddp",
+                     strategy_kwargs={"find_unused_parameters": False})
 
     # configure learning rate
     bs, base_lr = args.batch_size, args.base_lr

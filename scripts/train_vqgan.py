@@ -38,7 +38,9 @@ def main():
 
     kwargs = dict()
     if args.gpus > 1:
-        kwargs = dict(distributed_backend='ddp', gpus=args.gpus)
+        kwargs = dict(accelerator="gpu",
+                     devices=args.gpus,
+                     strategy="ddp")
 
     # load the most recent checkpoint file
     base_dir = os.path.join(args.default_root_dir, 'lightning_logs')

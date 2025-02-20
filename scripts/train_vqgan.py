@@ -15,7 +15,7 @@ def main():
     parser.add_argument('--gpus', type=int, default=1)
     parser.add_argument('--max_steps', type=int, default=None)
     parser.add_argument('--accumulate_grad_batches', type=int, default=1)
-    parser.add_argument('--gradient_clip_val', type=float, default=1.0)
+    # parser.add_argument('--gradient_clip_val', type=float, default=1.0)
     parser.add_argument('--default_root_dir', type=str, default='checkpoints/vqgan')
     
     parser = VQGAN.add_model_specific_args(parser)
@@ -46,7 +46,7 @@ def main():
     trainer_kwargs = {
         'callbacks': callbacks,
         'max_steps': args.max_steps,
-        'gradient_clip_val': args.gradient_clip_val,
+        # 'gradient_clip_val': args.gradient_clip_val,
         'accumulate_grad_batches': args.accumulate_grad_batches,
         'default_root_dir': args.default_root_dir
     }

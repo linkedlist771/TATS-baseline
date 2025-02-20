@@ -177,26 +177,27 @@ class VQGAN(pl.LightningModule):
         perceptual_loss = self.perceptual_model(frames, frames_recon) * self.perceptual_weight
         return recon_loss, x_recon, vq_output, perceptual_loss
 
-    def training_step(self, batch, batch_idx, optimizer_idx):
+    def training_step(self, batch, batch_idx):
         x = batch['video']
         
-        # 自编码器优化
-        if optimizer_idx == 0:
-            recon_loss, x_recon, vq_output, aeloss, perceptual_loss, gan_feat_loss = self.forward(x, optimizer_idx=0)
-            commitment_loss = vq_output['commitment_loss']
-            ae_loss = recon_loss + commitment_loss + aeloss + perceptual_loss + gan_feat_loss
-            
-            # Log losses
-            self.log("train/ae_loss", ae_loss, prog_bar=True)
-            return ae_loss
+        # 自编码器训练
+        recon_loss, x_recon, vq_output, aeloss, perceptual_loss, gan_feat_loss = self.forward(x, optimizer_idx=0)
+        commitment_loss = vq_output['commitment_loss']
+        ae_loss = recon_loss + commitment_loss + aeloss + perceptual_loss + gan_feat_loss
         
-        # 判别器优化
-        if optimizer_idx == 1:
-            disc_loss = self.forward(x, optimizer_idx=1)
-            
-            # Log losses 
-            self.log("train/disc_loss", disc_loss, prog_bar=True)
-            return disc_loss
+        # 判别器训练
+        disc_loss = self.forward(x, optimizer_idx=1)
+        
+        # Log losses
+        self.log("train/ae_loss", ae_loss, prog_bar=True)
+        self.log("train/disc_loss", disc_loss, prog_bar=True)
+        
+        # 返回所有损失
+        return {
+            "loss": ae_loss + disc_loss,
+            "ae_loss": ae_loss,
+            "disc_loss": disc_loss
+        }
 
     def validation_step(self, batch, batch_idx):
         x = batch['video'] # TODO: batch['stft']
@@ -218,8 +219,14 @@ class VQGAN(pl.LightningModule):
                                     list(self.video_discriminator.parameters()),
                                     lr=self.args.lr, betas=(0.5, 0.9))
         
-        # 返回优化器和调度器配置
-        return [opt_ae, opt_disc], []
+        # 返回字典格式的优化器配置
+        return {
+            "optimizer": opt_ae,
+            "frequency": 1,
+        }, {
+            "optimizer": opt_disc,
+            "frequency": 1,
+        }
 
     def log_images(self, batch, **kwargs):
         log = dict()

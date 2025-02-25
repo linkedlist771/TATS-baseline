@@ -8,4 +8,7 @@ jobs
 core
 .pyc
 .idea/
+output
+*tar
+*pkl
 *pth

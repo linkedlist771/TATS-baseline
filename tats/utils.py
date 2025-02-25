@@ -2,7 +2,7 @@
 
 import torch
 import imageio
-
+import  cv2
 import math
 import numpy as np
 import skvideo.io
@@ -111,28 +111,62 @@ def adopt_weight(global_step, threshold=0, value=0.):
     return weight
 
 
+# def save_video_grid(video, fname, nrow=None, fps=6):
+#     print(f"video shape: {video.shape}")
+#     print(f"fname: {fname}")
+#     b, c, t, h, w = video.shape
+#     video = video.permute(0, 2, 3, 4, 1)
+#     video = (video.cpu().numpy() * 255).astype('uint8')
+#     if nrow is None:
+#         nrow = math.ceil(math.sqrt(b))
+#     ncol = math.ceil(b / nrow)
+#     padding = 1
+#     video_grid = np.zeros((t, (padding + h) * nrow + padding,
+#                            (padding + w) * ncol + padding, c), dtype='uint8')
+#     print(video_grid.shape)
+#     for i in range(b):
+#         r = i // ncol
+#         c = i % ncol
+#         start_r = (padding + h) * r
+#         start_c = (padding + w) * c
+#         video_grid[:, start_r:start_r + h, start_c:start_c + w] = video[i]
+#     video = []
+#     for i in range(t):
+#         video.append(video_grid[i])
+#     imageio.mimsave(fname, video, fps=fps)
+#     # skvideo.io.vwrite(fname, video_grid, inputdict={'-r': '5'})
+#     print('saved videos to', fname)
+
 def save_video_grid(video, fname, nrow=None, fps=6):
     b, c, t, h, w = video.shape
     video = video.permute(0, 2, 3, 4, 1)
     video = (video.cpu().numpy() * 255).astype('uint8')
+    
     if nrow is None:
         nrow = math.ceil(math.sqrt(b))
     ncol = math.ceil(b / nrow)
     padding = 1
+    
     video_grid = np.zeros((t, (padding + h) * nrow + padding,
-                           (padding + w) * ncol + padding, c), dtype='uint8')
-    print(video_grid.shape)
+                          (padding + w) * ncol + padding, c), dtype='uint8')
+    
     for i in range(b):
         r = i // ncol
         c = i % ncol
         start_r = (padding + h) * r
         start_c = (padding + w) * c
         video_grid[:, start_r:start_r + h, start_c:start_c + w] = video[i]
-    video = []
+    
+    # Create VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(fname, fourcc, fps, 
+                         (video_grid.shape[2], video_grid.shape[1]))
+    
     for i in range(t):
-        video.append(video_grid[i])
-    imageio.mimsave(fname, video, fps=fps)
-    # skvideo.io.vwrite(fname, video_grid, inputdict={'-r': '5'})
+        frame = cv2.cvtColor(video_grid[i], cv2.COLOR_RGB2BGR)
+        out.write(frame)
+    
+    out.release()
     print('saved videos to', fname)
 
 

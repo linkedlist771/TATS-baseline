@@ -35,3 +35,8 @@ export CUDA_VISIBLE_DEVICES=1&&export PYTHONPATH=$PYTHONPATH:$(pwd) &&  python s
 ```
 
 - sample for all just like the MoCoGan does:
+
+```bash
+extract_frames_to_get_eval_dir.py
+
+```

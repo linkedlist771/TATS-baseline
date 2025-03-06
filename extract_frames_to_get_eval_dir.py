@@ -2,6 +2,7 @@ import cv2
 import os
 import numpy as np
 import math
+import argparse
 
 class AdvancedFrameExtractor:
     def __init__(self, output_dir="extracted_frames"):
@@ -172,25 +173,37 @@ class AdvancedFrameExtractor:
 
 
 if __name__ == "__main__":
-    # Example usage
-    true_video_dir = "resources"
-    generated_video_dir = "resources"
-    output_dir = "extracted_frames"
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Extract frames from video directories.')
+    parser.add_argument('--true_video_dir', type=str, required=True,
+                        help='Directory containing true/original videos')
+    parser.add_argument('--generated_video_dir', type=str, required=True,
+                        help='Directory containing generated videos')
+    parser.add_argument('--output_dir', type=str, default='extracted_frames',
+                        help='Output directory for extracted frames')
+    parser.add_argument('--resolution', type=int, default=128,
+                        help='Target resolution for resizing frames')
+    parser.add_argument('--every_n_frames', type=int, default=1,
+                        help='Extract every n-th frame')
+    parser.add_argument('--max_frames', type=int, default=None,
+                        help='Maximum number of frames to extract per video')
+    
+    args = parser.parse_args()
     
     # Create the frame extractor
-    extractor = AdvancedFrameExtractor(output_dir=output_dir)
+    extractor = AdvancedFrameExtractor(output_dir=args.output_dir)
     
-    # Process both directories with 256x256 resolution
+    # Process both directories
     true_paths, generated_paths = extractor.process_directories(
-        true_video_dir=true_video_dir,
-        generated_video_dir=generated_video_dir,
-        resolution=256,  # Set your desired resolution here
-        every_n_frames=1,  # Extract every frame
-        max_frames=None   # Extract all frames
+        true_video_dir=args.true_video_dir,
+        generated_video_dir=args.generated_video_dir,
+        resolution=args.resolution,
+        every_n_frames=args.every_n_frames,
+        max_frames=args.max_frames
     )
     
     # Print summary
     print(f"\nExtraction complete!")
     print(f"True frames extracted: {len(true_paths)}")
     print(f"Generated frames extracted: {len(generated_paths)}")
-    print(f"Frames saved to {output_dir}")
+    print(f"Frames saved to {args.output_dir}")

@@ -12,3 +12,5 @@ output
 *tar
 *pkl
 *pth
+resources/
+extracted_frames

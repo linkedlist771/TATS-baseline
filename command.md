@@ -34,9 +34,19 @@ export CUDA_VISIBLE_DEVICES=1&&export PYTHONPATH=$PYTHONPATH:$(pwd) &&  python s
 
 ```
 
+4. extract frames for eval
+
 - sample for all just like the MoCoGan does:
 
 ```bash
-extract_frames_to_get_eval_dir.py
+python extract_frames_to_get_eval_dir.py --true_video_dir  deposition_data_video_split/test/ --generated_video_dir output_videos/videos/ucf101/topp0.80_topk2048_run0/
+```
 
+5. eval
+
+
+In the SVD contianer:
+
+```bash
+CUDA_VISIBLE_DEVICES=3 && nohup python eval_metrics.py     --real-dir=/home/gpu02/dingli/TATS-baseline/extracted_frames/true/     --gen-dir=//home/gpu02/dingli/TATS-baseline/extracted_frames/generated/  > $(date +%m%d)"TATSFINtune".log 2>&1 &
 ```

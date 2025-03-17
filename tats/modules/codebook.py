@@ -1,5 +1,5 @@
 # Copyright (c) Meta Platforms, Inc. All Rights Reserved
-
+# codebook.py
 import numpy as np
 
 import torch

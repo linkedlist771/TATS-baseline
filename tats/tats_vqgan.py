@@ -1,5 +1,5 @@
 # Copyright (c) Meta Platforms, Inc. All Rights Reserved
-
+# tats_vqgan.py
 import math
 import argparse
 import numpy as np

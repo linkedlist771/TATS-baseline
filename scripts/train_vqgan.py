@@ -1,5 +1,5 @@
 # Copyright (c) Meta Platforms, Inc. All Rights Reserved
-
+# train_vqgan.py
 import os
 import argparse
 import pytorch_lightning as pl

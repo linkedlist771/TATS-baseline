@@ -8,3 +8,4 @@ jobs
 core
 .pyc
 .idea/
+dummy/

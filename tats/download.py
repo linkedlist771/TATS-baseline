@@ -53,13 +53,35 @@ def load_vqgan(vqgan_ckpt, device=torch.device('cpu')):
 
     return vqgan
 
+def load_vqgan(vqgan_ckpt, device=torch.device('cpu')):
+    # 方案1：使用 add_safe_globals
+    from torch.serialization import add_safe_globals
+    from argparse import Namespace
+    add_safe_globals([Namespace])
+    
+    vqgan = VQGAN.load_from_checkpoint(
+        vqgan_ckpt,
+        map_location=lambda storage, loc: storage
+    ).to(device)
+    vqgan.eval()
+    return vqgan
+
+
 def load_transformer(gpt_ckpt, vqgan_ckpt, stft_vqgan_ckpt='', device=torch.device('cpu')):
+    # Use safer loading approach similar to load_vqgan
     from pytorch_lightning.utilities.cloud_io import load as pl_load
-    checkpoint = pl_load(gpt_ckpt)
+    from argparse import Namespace
+    from torch.serialization import add_safe_globals
+    
+    # Add Namespace to safe globals to prevent deserialization issues
+    add_safe_globals([Namespace])
+    
+    checkpoint = pl_load(gpt_ckpt, map_location=lambda storage, loc: storage)
     checkpoint['hyper_parameters']['args'].vqvae = vqgan_ckpt
     if stft_vqgan_ckpt:
         checkpoint['hyper_parameters']['args'].stft_vqvae = stft_vqgan_ckpt
     gpt = Net2NetTransformer._load_model_state(checkpoint)
+    gpt = gpt.to(device)
     gpt.eval()
 
     return gpt

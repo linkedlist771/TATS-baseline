@@ -9,3 +9,7 @@ core
 .pyc
 .idea/
 dummy/
+output
+*tar
+*pkl
+*pth

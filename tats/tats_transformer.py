@@ -35,6 +35,7 @@ class Net2NetTransformer(pl.LightningModule):
         self.cond_stage_key = cond_stage_key
         self.vtokens = args.vtokens
         self.sample_every_n_latent_frames = getattr(args, 'sample_every_n_latent_frames', 0)
+        self.learning_rate = args.base_lr
         
         self.init_first_stage_from_ckpt(args)
         self.init_cond_stage_from_ckpt(args)
@@ -92,6 +93,20 @@ class Net2NetTransformer(pl.LightningModule):
         elif self.cond_stage_key=='text':
             self.cond_stage_model = Identity()
             self.cond_stage_vocab_size = 49408
+        elif self.cond_stage_key=='frame':
+            # Use first frame as conditioning
+            from .modules.frame_cond import FrameConditioner
+            self.cond_stage_model = FrameConditioner(
+                resolution=args.resolution,
+                n_cond_frames=args.n_cond_frames,
+                embd_dim=args.frame_cond_dim,
+                quantize_interface=True
+            )
+            for p in self.cond_stage_model.parameters():
+                p.requires_grad = False
+            self.cond_stage_model.eval()
+            self.cond_stage_model.train = disabled_train
+            self.cond_stage_vocab_size = args.frame_cond_dim
         elif self.be_unconditional:
             print(f"Using no cond stage. Assuming the training is intended to be unconditional. "
                   f"Prepending {self.sos_token} as a sos token.")
@@ -100,13 +115,26 @@ class Net2NetTransformer(pl.LightningModule):
             self.cond_stage_model = SOSProvider(self.sos_token)
             self.cond_stage_vocab_size = 0
         else:
-            ValueError('conditional model %s is not implementated'%self.cond_stage_key)
+            raise ValueError('conditional model %s is not implementated'%self.cond_stage_key)
 
     def forward(self, x, c, cbox=None):
         # one step to produce the logits
         _, z_indices = self.encode_to_z(x)
         _, c_indices = self.encode_to_c(c)
-        z_indices = z_indices + self.cond_stage_vocab_size
+        
+        # For frame conditioning, we need to handle the case differently
+        if self.cond_stage_key == 'frame':
+            # During training, we use the encoded frame features directly
+            # During generation, we'll cache these features
+            self.frame_cond_cache = c_indices
+            
+            # For frame conditioning, we don't need to offset z_indices
+            # because we're using continuous features, not discrete tokens
+            target = z_indices
+        else:
+            # For other conditioning types, we offset the z indices
+            z_indices = z_indices + self.cond_stage_vocab_size
+            target = z_indices
 
         if self.training and self.pkeep < 1.0:
             mask = torch.bernoulli(self.pkeep*torch.ones(z_indices.shape,
@@ -119,9 +147,6 @@ class Net2NetTransformer(pl.LightningModule):
 
         cz_indices = torch.cat((c_indices, a_indices), dim=1)
 
-        # target includes all sequence elements (no need to handle first one
-        # differently because we are conditioning)
-        target = z_indices
         # make the prediction
         logits, _ = self.transformer(cz_indices[:, :-1], cbox=cbox)
         # cut off conditioning outputs - output i corresponds to p(z_i | z_{<i}, c)
@@ -138,7 +163,22 @@ class Net2NetTransformer(pl.LightningModule):
     @torch.no_grad()
     def sample(self, x, c, steps, temperature=1.0, sample=False, top_k=None,
                callback=lambda k: None):
-        x = torch.cat((c,x),dim=1)
+        # For frame conditioning, we need to handle differently
+        if self.cond_stage_key == 'frame':
+            # Use the cached frame features if available
+            if hasattr(self, 'frame_cond_cache') and self.frame_cond_cache is not None:
+                c = self.frame_cond_cache
+            else:
+                # If not cached, encode the frame
+                _, c = self.encode_to_c(c)
+            
+            # For frame conditioning, we don't need to offset the vocabulary
+            vocab_offset = 0
+        else:
+            # For other conditioning types, we need to offset the vocabulary
+            vocab_offset = self.cond_stage_vocab_size
+        
+        x = torch.cat((c, x), dim=1)
         block_size = self.transformer.get_block_size()
         assert not self.transformer.training
         if self.pkeep <= 0.0:
@@ -167,6 +207,10 @@ class Net2NetTransformer(pl.LightningModule):
                 _, ix = torch.topk(probs, k=1, dim=-1)
             # cut off conditioning
             x = ix[:, c.shape[1]-1:]
+            
+            # Add vocabulary offset for non-frame conditioning
+            if vocab_offset > 0:
+                x = x + vocab_offset
         else:
             for k in range(steps):
                 callback(k)
@@ -185,6 +229,11 @@ class Net2NetTransformer(pl.LightningModule):
                     ix = torch.multinomial(probs, num_samples=1)
                 else:
                     _, ix = torch.topk(probs, k=1, dim=-1)
+                
+                # Add vocabulary offset for non-frame conditioning
+                if vocab_offset > 0:
+                    ix = ix + vocab_offset
+                
                 # append to the sequence and continue
                 x = torch.cat((x, ix), dim=1)
             # cut off conditioning
@@ -219,7 +268,13 @@ class Net2NetTransformer(pl.LightningModule):
 
     def get_xc(self, batch, N=None):
         x = self.get_input(self.first_stage_key, batch)
-        c = self.get_input(self.cond_stage_key, batch)
+        
+        if self.cond_stage_key == 'frame' and self.first_stage_key == 'video':
+            # For frame conditioning, use the first frame(s) of the video as conditioning
+            c = x[:, :self.args.n_cond_frames].clone()  # Take first n_cond_frames
+        else:
+            c = self.get_input(self.cond_stage_key, batch)
+            
         if N is not None:
             x = x[:N]
             c = c[:N]
@@ -319,7 +374,11 @@ class Net2NetTransformer(pl.LightningModule):
         parser.add_argument('--n_unmasked', type=int, default=0)
         parser.add_argument('--sample_every_n_latent_frames', type=int, default=0)
         parser.add_argument('--first_stage_key', type=str, default='video', choices=['video'])
-        parser.add_argument('--cond_stage_key', type=str, default='label', choices=['label', 'text', 'stft'])
+        parser.add_argument('--cond_stage_key', type=str, default='label', choices=['label', 'text', 'stft', 'frame'])
+        # Frame conditioning parameters
+        parser.add_argument('--n_cond_frames', type=int, default=1, help='Number of conditioning frames')
+        parser.add_argument('--resolution', type=int, default=256, help='Video resolution')
+        parser.add_argument('--frame_cond_dim', type=int, default=512, help='Frame conditioning embedding dimension')
 
         return parser
 
